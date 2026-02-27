@@ -14,6 +14,23 @@ export const env = createEnv({
     RAZORPAY_KEY_ID: z.string(),
     RAZORPAY_KEY_SECRET: z.string(),
     RAZORPAY_WEBHOOK_SECRET: z.string(),
+    // AWS Core
+    AWS_ACCESS_KEY_ID: z.string(),
+    AWS_SECRET_ACCESS_KEY: z.string(),
+    AWS_REGION: z.string().default("us-east-1"),
+    // Amazon Bedrock
+    AWS_BEDROCK_TEXT_MODEL_ID: z.string().default("anthropic.claude-3-sonnet-20240229-v1:0"),
+    AWS_BEDROCK_HAIKU_MODEL_ID: z.string().default("anthropic.claude-3-haiku-20240307-v1:0"),
+    AWS_BEDROCK_EMBEDDING_MODEL_ID: z.string().default("amazon.titan-embed-text-v1"),
+    // Amazon Q Business
+    AMAZON_Q_APP_ID: z.string().optional(),
+    // GitHub
+    GITHUB_TOKEN: z.string().optional(),
+    // Zoom
+    ZOOM_JWT_TOKEN: z.string().optional(),
+    ZOOM_WEBHOOK_SECRET: z.string().optional(),
+    // Low balance threshold (credits)
+    LOW_BALANCE_THRESHOLD: z.coerce.number().default(20),
   },
 
   /**
@@ -35,6 +52,23 @@ export const env = createEnv({
     RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
     RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
     RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET,
+    // AWS Core
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_REGION: process.env.AWS_REGION,
+    // Amazon Bedrock
+    AWS_BEDROCK_TEXT_MODEL_ID: process.env.AWS_BEDROCK_TEXT_MODEL_ID,
+    AWS_BEDROCK_HAIKU_MODEL_ID: process.env.AWS_BEDROCK_HAIKU_MODEL_ID,
+    AWS_BEDROCK_EMBEDDING_MODEL_ID: process.env.AWS_BEDROCK_EMBEDDING_MODEL_ID,
+    // Amazon Q Business
+    AMAZON_Q_APP_ID: process.env.AMAZON_Q_APP_ID,
+    // GitHub
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    // Zoom
+    ZOOM_JWT_TOKEN: process.env.ZOOM_JWT_TOKEN,
+    ZOOM_WEBHOOK_SECRET: process.env.ZOOM_WEBHOOK_SECRET,
+    // Low balance threshold
+    LOW_BALANCE_THRESHOLD: process.env.LOW_BALANCE_THRESHOLD,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**

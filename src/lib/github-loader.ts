@@ -78,7 +78,7 @@ export const indexGithubRepo = async (
     console.log(`Saving to DB: file ${index+1} of ${allEmbeddings.length}`);
     if(!embedding) return
 
-    const sourceCodeEmbedding = await db.sourceCodeEmbedding.create({
+    const fileIndex = await db.fileIndex.create({
         data: {
             projectId,
             fileName: embedding.fileName,
@@ -90,8 +90,8 @@ export const indexGithubRepo = async (
     // Update the embedding in the database
     await db.$executeRaw`
     UPDATE "SourceCodeEmbedding"
-    SET "summaryEmbedding" = ${embedding.embedding}::vector
-    WHERE "id" = ${sourceCodeEmbedding.id}
+    SET "embedding" = ${embedding.embedding}::vector
+    WHERE "id" = ${fileIndex.id}
     `
   }))
   

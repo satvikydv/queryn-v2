@@ -45,7 +45,7 @@ const JoinHandler = async (props: Props) => {
         return redirect('/dashboard')
     }
     try {
-        await db.userToProject.create({
+        await db.teamMember.create({
             data:{
                 userId,
                 projectId

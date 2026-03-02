@@ -89,15 +89,34 @@ export async function generateText(
   const modelId =
     model === "haiku" ? env.AWS_BEDROCK_HAIKU_MODEL_ID : env.AWS_BEDROCK_TEXT_MODEL_ID;
 
-  const body: Record<string, unknown> = {
-    anthropic_version: "bedrock-2023-05-31",
-    max_tokens: maxTokens,
-    temperature,
-    messages: [{ role: "user", content: prompt }],
-  };
+  // Nova and Claude use different request/response formats
+  const isNova = modelId.includes("nova");
+  const isClaude = modelId.includes("claude");
 
-  if (systemPrompt) {
-    body.system = systemPrompt;
+  let body: Record<string, unknown>;
+
+  if (isNova) {
+    // Amazon Nova format
+    body = {
+      messages: [{ role: "user", content: [{ text: prompt }] }],
+      inferenceConfig: { maxTokens, temperature },
+    };
+    if (systemPrompt) {
+      body.system = [{ text: systemPrompt }];
+    }
+  } else if (isClaude) {
+    // Anthropic Claude format
+    body = {
+      anthropic_version: "bedrock-2023-05-31",
+      max_tokens: maxTokens,
+      temperature,
+      messages: [{ role: "user", content: prompt }],
+    };
+    if (systemPrompt) {
+      body.system = systemPrompt;
+    }
+  } else {
+    throw new Error(`[Bedrock] Unsupported model format for: ${modelId}`);
   }
 
   const input: InvokeModelCommandInput = {
@@ -112,17 +131,26 @@ export async function generateText(
   );
 
   const decoded = new TextDecoder().decode(response.body);
-  const parsed = JSON.parse(decoded) as {
-    content: Array<{ type: string; text: string }>;
-  };
 
-  const text = parsed.content
-    .filter((c) => c.type === "text")
-    .map((c) => c.text)
-    .join("");
+  let text = "";
+
+  if (isNova) {
+    const parsed = JSON.parse(decoded) as {
+      output: { message: { content: Array<{ text: string }> } };
+    };
+    text = parsed.output.message.content.map((c) => c.text).join("");
+  } else {
+    const parsed = JSON.parse(decoded) as {
+      content: Array<{ type: string; text: string }>;
+    };
+    text = parsed.content
+      .filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("");
+  }
 
   if (!text) {
-    throw new Error("[Bedrock] Empty response from Claude");
+    throw new Error("[Bedrock] Empty response from model");
   }
 
   return text;
@@ -133,9 +161,9 @@ export async function generateText(
 // ---------------------------------------------------------------------------
 
 /**
- * Generate a 1536-dimension embedding using Amazon Bedrock Titan.
- * P12: Always uses titan-embed-text-v1 → returns exactly 1536 floats.
- * P13: Returned vector stored in PostgreSQL pgvector column vector(1536).
+ * Generate a 1024-dimension embedding using Amazon Bedrock Titan Embed Text v2.
+ * P12: Uses amazon.titan-embed-text-v2:0 → returns exactly 1024 floats.
+ * P13: Returned vector stored in PostgreSQL pgvector column vector(1024).
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const trimmed = text.trim();
@@ -157,9 +185,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   const decoded = new TextDecoder().decode(response.body);
   const parsed = JSON.parse(decoded) as { embedding: number[] };
 
-  if (!Array.isArray(parsed.embedding) || parsed.embedding.length !== 1536) {
+  if (!Array.isArray(parsed.embedding) || parsed.embedding.length !== 1024) {
     throw new Error(
-      `[Bedrock] Unexpected embedding dimensions: ${parsed.embedding?.length ?? 0} (expected 1536)`,
+      `[Bedrock] Unexpected embedding dimensions: ${parsed.embedding?.length ?? 0} (expected 1024)`,
     );
   }
 

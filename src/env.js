@@ -19,9 +19,9 @@ export const env = createEnv({
     AWS_SECRET_ACCESS_KEY: z.string(),
     AWS_REGION: z.string().default("us-east-1"),
     // Amazon Bedrock
-    AWS_BEDROCK_TEXT_MODEL_ID: z.string().default("anthropic.claude-3-sonnet-20240229-v1:0"),
-    AWS_BEDROCK_HAIKU_MODEL_ID: z.string().default("anthropic.claude-3-haiku-20240307-v1:0"),
-    AWS_BEDROCK_EMBEDDING_MODEL_ID: z.string().default("amazon.titan-embed-text-v1"),
+    AWS_BEDROCK_TEXT_MODEL_ID: z.string().default("amazon.nova-pro-v1:0"),
+    AWS_BEDROCK_HAIKU_MODEL_ID: z.string().default("amazon.nova-lite-v1:0"),
+    AWS_BEDROCK_EMBEDDING_MODEL_ID: z.string().default("amazon.titan-embed-text-v2:0"),
     // Amazon Q Business
     AMAZON_Q_APP_ID: z.string().optional(),
     // GitHub

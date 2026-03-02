@@ -52,7 +52,7 @@ function QApage() {
               {question.question}
             </SheetTitle>
             <MDEditor.Markdown source={(question.answer ?? "Error generating answer")} />
-            <CodeReferences filesReferences={(question.filesReferences ?? []) as any} />
+            <CodeReferences filesReferences={(question.context ?? []) as any} />
           </SheetHeader>
         </SheetContent>
       )}

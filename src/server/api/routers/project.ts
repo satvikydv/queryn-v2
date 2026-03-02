@@ -36,7 +36,7 @@ export const projectRouter = createTRPCRouter({
         data: {
           name: input.name,
           githubUrl: input.githubUrl,
-          UserToProject: {
+          teamMembers: {
             create: {
               userId: ctx.user.userId!,
             },
@@ -111,7 +111,7 @@ export const projectRouter = createTRPCRouter({
   getProjects: protectedProcedure.query(async ({ ctx }) => {
     return await ctx.db.project.findMany({
       where: {
-        UserToProject: {
+        teamMembers: {
           some: {
             userId: ctx.user.userId!,
           },
@@ -119,7 +119,7 @@ export const projectRouter = createTRPCRouter({
         deletedAt: null,
       },
       include: {
-        UserToProject: true,
+        teamMembers: true,
       },
     });
   }),
@@ -162,12 +162,12 @@ export const projectRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return await ctx.db.question.create({
+      return await ctx.db.qAInteraction.create({
         data: {
           projectId: input.projectId,
           question: input.question,
           answer: input.answer,
-          filesReferences: input.filesReferences,
+          context: input.filesReferences,
           userId: ctx.user.userId!,
         },
       });
@@ -176,7 +176,7 @@ export const projectRouter = createTRPCRouter({
   getQuestions: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
-      return await ctx.db.question.findMany({
+      return await ctx.db.qAInteraction.findMany({
         where: {
           projectId: input.projectId,
         },
@@ -213,7 +213,7 @@ export const projectRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return await ctx.db.userToProject.findMany({
+      return await ctx.db.teamMember.findMany({
         where: {
           projectId: input.projectId,
         },

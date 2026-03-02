@@ -98,7 +98,7 @@ model Commit {
 
 // ---------------------------------------------------------------------------
 // FileIndex (renamed from SourceCodeEmbedding — DB table name preserved)
-// Vector dimension: 3072 (Gemini) → 1536 (Amazon Bedrock Titan)  [P12]
+// Vector dimension: 3072 (Gemini) → 1024 (Amazon Bedrock Titan v2) [P12]
 // Added sha for incremental re-indexing                           [P15]
 // Added @@unique([projectId, fileName]) for upsert on re-index   [P15]
 // ---------------------------------------------------------------------------
@@ -111,8 +111,8 @@ model FileIndex {
   sourceCode String
   summary    String
 
-  // Amazon Bedrock Titan Embed v1 — 1536 dimensions (P12, P13)
-  embedding Unsupported("vector(1536)")?
+  // Amazon Bedrock Titan Embed v2 — 1024 dimensions (P12, P13)
+  embedding Unsupported("vector(1024)")?
 
   // File SHA for incremental indexing (P15) — null until first Bedrock index
   sha String?

@@ -1,10 +1,8 @@
 import { db } from "@/server/db"
 import { Octokit } from "octokit"
 import axios from "axios"
-import { batchSummariseCommits } from "./groq"
+import { generateText } from "./bedrock"
 import { progressStore } from "./progress-store"
-
-const githubUrl = "https://github.com/docker/genai-stack"
 
 type Response = {
     commitHash: string,
@@ -73,21 +71,31 @@ export const pollCommits = async(projectId: string, githubToken?: string) => {
             })
         );
         
-        // Batch process summaries with rate limiting
-        const summaryResults = await batchSummariseCommits(
-            diffsToProcess,
-            (processed, total) => {
-                // Update progress store for UI
-                progressStore.setProgress(projectId, {
-                    processed,
-                    total,
-                    currentFile: `Processing commit ${processed}/${total}`,
-                    estimatedTimeRemaining: 0,
-                    status: 'in-progress',
-                    phase: 'commits'
-                });
+        // Process summaries per commit using Bedrock Nova Lite (P25)
+        const summaryResults: { commitHash: string; summary: string }[] = [];
+        for (let i = 0; i < diffsToProcess.length; i++) {
+            const { diff, commitHash } = diffsToProcess[i]!;
+            progressStore.setProgress(projectId, {
+                processed: i,
+                total: diffsToProcess.length,
+                currentFile: `Processing commit ${i + 1}/${diffsToProcess.length}`,
+                estimatedTimeRemaining: 0,
+                status: 'in-progress',
+                phase: 'commits'
+            });
+            try {
+                const summary = await generateText(
+                    `Summarize the following git commit diff in 1-3 sentences. Focus on what changed and why it matters.\n\n${diff.slice(0, 6000)}`,
+                    { model: 'haiku', maxTokens: 256, temperature: 0.3 }
+                );
+                summaryResults.push({ commitHash, summary });
+            } catch (err) {
+                console.error(`[Bedrock] Failed to summarize commit ${commitHash}:`, err);
+                summaryResults.push({ commitHash, summary: 'Unable to summarize this commit.' });
             }
-        );
+            // Brief delay to respect Bedrock rate limits
+            if (i < diffsToProcess.length - 1) await new Promise(r => setTimeout(r, 300));
+        }
 
         const commits = await db.commit.createMany({
             data: unprocessedCommits.map((commit, index) => {

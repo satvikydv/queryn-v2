@@ -9,6 +9,7 @@
 import {
   BedrockRuntimeClient,
   InvokeModelCommand,
+  InvokeModelWithResponseStreamCommand,
   type InvokeModelCommandInput,
 } from "@aws-sdk/client-bedrock-runtime";
 import { env } from "@/env";
@@ -154,6 +155,80 @@ export async function generateText(
   }
 
   return text;
+}
+
+// ---------------------------------------------------------------------------
+// Streaming text generation (for Q&A — real-time token streaming)
+// ---------------------------------------------------------------------------
+
+/**
+ * Stream text generation token-by-token using Bedrock Nova or Claude.
+ * Returns an async generator yielding text deltas.
+ * P19, P60: Q&A answers stream in real-time from Bedrock.
+ */
+export async function* streamGenerateText(
+  prompt: string,
+  options: BedrockTextOptions = {},
+): AsyncGenerator<string> {
+  const { model = "sonnet", maxTokens = 4096, temperature = 0.5, systemPrompt } = options;
+
+  const modelId =
+    model === "haiku" ? env.AWS_BEDROCK_HAIKU_MODEL_ID : env.AWS_BEDROCK_TEXT_MODEL_ID;
+
+  const isNova = modelId.includes("nova");
+
+  let body: Record<string, unknown>;
+  if (isNova) {
+    body = {
+      messages: [{ role: "user", content: [{ text: prompt }] }],
+      inferenceConfig: { maxTokens, temperature },
+    };
+    if (systemPrompt) body.system = [{ text: systemPrompt }];
+  } else {
+    body = {
+      anthropic_version: "bedrock-2023-05-31",
+      max_tokens: maxTokens,
+      temperature,
+      messages: [{ role: "user", content: prompt }],
+    };
+    if (systemPrompt) body.system = systemPrompt;
+  }
+
+  const response = await withRetry(() =>
+    getClient().send(
+      new InvokeModelWithResponseStreamCommand({
+        modelId,
+        contentType: "application/json",
+        accept: "application/json",
+        body: JSON.stringify(body),
+      }),
+    ),
+  );
+
+  if (!response.body) return;
+
+  for await (const event of response.body) {
+    const chunk = event.chunk?.bytes;
+    if (!chunk) continue;
+    const decoded = new TextDecoder().decode(chunk);
+    try {
+      const parsed = JSON.parse(decoded) as Record<string, unknown>;
+      // Nova streaming format
+      if (isNova) {
+        const delta = (parsed as { contentBlockDelta?: { delta?: { text?: string } } })
+          .contentBlockDelta?.delta?.text;
+        if (delta) yield delta;
+      } else {
+        // Claude streaming format
+        const delta = (parsed as { delta?: { type?: string; text?: string } }).delta;
+        if (delta?.type === "content_block_delta" || delta?.text) {
+          if (delta.text) yield delta.text;
+        }
+      }
+    } catch {
+      // skip malformed chunks
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

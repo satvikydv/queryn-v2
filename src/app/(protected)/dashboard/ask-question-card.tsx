@@ -188,10 +188,10 @@ function AskQuestionCard() {
                 </DialogPrimitive.Portal>
             </DialogPrimitive.Root>
 
-            <Card className="group relative col-span-2 overflow-hidden border-zinc-800/60 bg-zinc-950 transition-all duration-300 hover:border-zinc-700/80 hover:shadow-lg hover:shadow-black/20">
+            <Card className="group relative col-span-2 overflow-hidden transition-all duration-300 hover:shadow-lg">
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-500/[0.03] to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
                 <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-base text-zinc-100">
+                    <CardTitle className="flex items-center gap-2 text-base">
                         <SparklesIcon className="size-4 text-blue-400" />
                         Ask a Question
                     </CardTitle>
@@ -202,7 +202,7 @@ function AskQuestionCard() {
                             placeholder="Ask anything about your codebase…"
                             value={question}
                             onChange={e => setQuestion(e.target.value)}
-                            className="min-h-[80px] resize-none rounded-lg border-zinc-800/60 bg-zinc-900/50 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-blue-500/40 focus:ring-blue-500/20"
+                            className="min-h-[80px] resize-none rounded-lg text-sm focus:border-blue-500/40 focus:ring-blue-500/20"
                         />
                         <Button
                             type="submit"

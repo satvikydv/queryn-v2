@@ -12,6 +12,7 @@ import AskQuestionCard from "./ask-question-card";
 import ArchiveButton from "./archive-button";
 import InviteButton from "./invite-button";
 import TeamMembers from "./team-members";
+import ReindexButton from "./reindex-button";
 
 function Dashboard() {
   const { project } = useProject();
@@ -42,6 +43,7 @@ function Dashboard() {
 
         <div className="flex items-center gap-4">
           <TeamMembers />
+          <ReindexButton />
           <ArchiveButton />
           <InviteButton />
         </div>

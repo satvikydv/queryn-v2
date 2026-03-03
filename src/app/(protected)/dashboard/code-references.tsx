@@ -1,72 +1,75 @@
 'use client'
 
-import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { dark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { cn } from '@/lib/utils'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import React from 'react'
 
 type Props = {
-    filesReferences: { fileName: string; sourceCode: string; summary: string }[];
+    filesReferences: { fileName: string; sourceCode: string; summary: string }[]
 }
 
-const CodeReferences = ({filesReferences}: Props) => {
-  const [tab, setTab] = React.useState(filesReferences[0]?.fileName)
-  if(filesReferences.length === 0) return <div>No code references found</div>
+function shortName(path: string) {
+    const parts = path.split('/')
+    return parts[parts.length - 1] ?? path
+}
 
-  return (
-    <div className='w-full'>
-        <Tabs value={tab} onValueChange={setTab}>
-            {/* Enhanced tab header with dark theme */}
-            <div className='overflow-x-auto flex gap-2 bg-slate-900 p-1 rounded-lg mb-3 border border-slate-700'>
-                <div className='flex gap-2 min-w-max'>
-                    {filesReferences.map(file => (
-                        <button 
-                            key={file.fileName} 
-                            onClick={() => setTab(file.fileName)}
-                            className={cn(
-                                'px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap flex-shrink-0',
-                                {
-                                    'bg-blue-600 text-white shadow-md': tab === file.fileName,
-                                    'text-slate-300 hover:bg-slate-800 hover:text-white': tab !== file.fileName
-                                }
-                            )}
-                        >
-                            {file.fileName}
-                        </button>
-                    ))}
-                </div>
+const CodeReferences = ({ filesReferences }: Props) => {
+    const [tab, setTab] = React.useState(filesReferences[0]?.fileName)
+
+    if (filesReferences.length === 0)
+        return (
+            <div className="flex h-full items-center justify-center">
+                <p className="text-sm text-zinc-600">No file references found.</p>
             </div>
-            
-            {/* Enhanced code display with dark theme */}
-            {filesReferences.map(file => (
-                <TabsContent 
-                    key={file.fileName} 
-                    value={file.fileName}
-                    className='mt-0 w-full'
-                >
-                    <div className='max-h-[30vh] overflow-auto rounded-lg border border-slate-700 bg-slate-900 shadow-lg'>
-                        <SyntaxHighlighter 
-                            language='typescript' 
-                            style={dark}
+        )
+
+    return (
+        <div className="flex h-full flex-col gap-2.5">
+            {/* Sleek tab bar */}
+            <div className="flex gap-1 overflow-x-auto rounded-lg bg-zinc-900/80 p-1 ring-1 ring-zinc-800/50" style={{ backdropFilter: 'blur(8px)' }}>
+                {filesReferences.map(file => (
+                    <button
+                        key={file.fileName}
+                        onClick={() => setTab(file.fileName)}
+                        title={file.fileName}
+                        className={cn(
+                            'relative flex-shrink-0 rounded-md px-3 py-1.5 text-[11px] font-medium whitespace-nowrap transition-all duration-200',
+                            tab === file.fileName
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/25'
+                                : 'text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-300'
+                        )}
+                    >
+                        {shortName(file.fileName)}
+                    </button>
+                ))}
+            </div>
+
+            {/* Code panel */}
+            <div className="min-h-0 flex-1 overflow-auto rounded-lg ring-1 ring-zinc-800/50">
+                {filesReferences.map(file => (
+                    <div key={file.fileName} style={{ display: tab === file.fileName ? 'block' : 'none' }}>
+                        <SyntaxHighlighter
+                            language="python"
+                            style={vscDarkPlus}
                             customStyle={{
                                 margin: 0,
-                                fontSize: '13px',
-                                lineHeight: '1.5',
-                                backgroundColor: '#0f172a', // slate-900
+                                fontSize: '12px',
+                                lineHeight: '1.6',
+                                background: '#0d1117',
                                 borderRadius: '0.5rem',
-                                padding: '1rem'
+                                padding: '1rem',
+                                minHeight: '100%',
                             }}
-                            wrapLongLines={true}
+                            wrapLongLines={false}
                         >
                             {file.sourceCode}
                         </SyntaxHighlighter>
                     </div>
-                </TabsContent>
-            ))}
-        </Tabs>
-    </div>
-  )
+                ))}
+            </div>
+        </div>
+    )
 }
 
 export default CodeReferences

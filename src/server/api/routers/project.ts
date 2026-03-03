@@ -254,6 +254,52 @@ export const projectRouter = createTRPCRouter({
     };
   }),
 
+  // Re-index an existing project's repository
+  reindexProject: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      githubToken: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const project = await ctx.db.project.findFirst({
+        where: {
+          id: input.projectId,
+          teamMembers: { some: { userId: ctx.user.userId! } },
+          deletedAt: null,
+        },
+        select: { id: true, githubUrl: true },
+      });
+      if (!project) throw new Error('Project not found or access denied');
+
+      const fileCount = await checkCredits(project.githubUrl, input.githubToken);
+
+      progressStore.setProgress(project.id, {
+        processed: 0,
+        total: fileCount,
+        currentFile: '',
+        estimatedTimeRemaining: 0,
+        status: 'pending',
+        phase: 'summarizing',
+      });
+
+      indexGithubRepo(project.id, project.githubUrl, input.githubToken, (progress) => {
+        progressStore.setProgress(project.id, { ...progress, status: 'in-progress' });
+      }).then(() => {
+        progressStore.setProgress(project.id, {
+          processed: fileCount, total: fileCount, currentFile: '',
+          estimatedTimeRemaining: 0, status: 'completed',
+        });
+      }).catch((error) => {
+        console.error('Error during re-indexing:', error);
+        progressStore.setProgress(project.id, {
+          processed: 0, total: fileCount, currentFile: '',
+          estimatedTimeRemaining: 0, status: 'error', error: error.message,
+        });
+      });
+
+      return { success: true, fileCount };
+    }),
+
   // Get embedding progress for a project
   getProgress: protectedProcedure
     .input(z.object({ projectId: z.string() }))

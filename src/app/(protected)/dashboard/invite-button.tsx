@@ -29,7 +29,7 @@ const InviteButton = () => {
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
             <DialogHeader>
                 <DialogTitle className='text-lg font-semibold'>
                     Invite Members to Project

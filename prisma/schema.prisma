@@ -161,15 +161,17 @@ enum MeetingStatus {
 }
 
 model MeetingSession {
-  id         String        @id @default(cuid())
-  projectId  String
-  meetingUrl String
-  status     MeetingStatus @default(SCHEDULED)
-  transcript String?
-  summary    Json?         // { summary, actionItems, decisions, keyPoints, participants }
-  duration   Int?          // seconds
-  createdAt  DateTime      @default(now())
-  endedAt    DateTime?
+  id           String        @id @default(cuid())
+  projectId    String
+  title        String?       // user-provided meeting title
+  meetingUrl   String
+  status       MeetingStatus @default(SCHEDULED)
+  transcript   String?
+  summary      Json?         // { summary, actionItems, decisions, keyPoints }
+  duration     Int?          // seconds
+  botSessionId String?       // internal bot runner key for stop/status lookup
+  createdAt    DateTime      @default(now())
+  endedAt      DateTime?
 
   project Project @relation(fields: [projectId], references: [id])
 

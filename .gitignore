@@ -58,3 +58,10 @@ notes.txt
 .kiro
 .agent
 .agents
+
+# Playwright saved auth state (contains Google cookies — never commit)
+.pw/
+
+# Bot audio debug recordings
+/recordings/
+*.wav

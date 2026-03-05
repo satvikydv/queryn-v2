@@ -17,7 +17,9 @@ export const env = createEnv({
     // AWS Core
     AWS_ACCESS_KEY_ID: z.string(),
     AWS_SECRET_ACCESS_KEY: z.string(),
-    AWS_REGION: z.string().default("us-east-1"),
+    AWS_REGION: z.string().default("eu-north-1"),
+    // Amazon Transcribe uses a different region (eu-north-1 not supported)
+    AWS_TRANSCRIBE_REGION: z.string().default("eu-west-1"),
     // Amazon Bedrock
     AWS_BEDROCK_TEXT_MODEL_ID: z.string().default("eu.amazon.nova-pro-v1:0"),
     AWS_BEDROCK_HAIKU_MODEL_ID: z.string().default("eu.amazon.nova-lite-v1:0"),
@@ -29,6 +31,9 @@ export const env = createEnv({
     // Zoom
     ZOOM_JWT_TOKEN: z.string().optional(),
     ZOOM_WEBHOOK_SECRET: z.string().optional(),
+    // Google Meet bot credentials (dedicated Google account for the bot)
+    GOOGLE_BOT_EMAIL: z.string().optional(),
+    GOOGLE_BOT_PASSWORD: z.string().optional(),
     // Low balance threshold (credits)
     LOW_BALANCE_THRESHOLD: z.coerce.number().default(20),
   },
@@ -56,6 +61,7 @@ export const env = createEnv({
     AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
     AWS_REGION: process.env.AWS_REGION,
+    AWS_TRANSCRIBE_REGION: process.env.AWS_TRANSCRIBE_REGION,
     // Amazon Bedrock
     AWS_BEDROCK_TEXT_MODEL_ID: process.env.AWS_BEDROCK_TEXT_MODEL_ID,
     AWS_BEDROCK_HAIKU_MODEL_ID: process.env.AWS_BEDROCK_HAIKU_MODEL_ID,
@@ -67,6 +73,9 @@ export const env = createEnv({
     // Zoom
     ZOOM_JWT_TOKEN: process.env.ZOOM_JWT_TOKEN,
     ZOOM_WEBHOOK_SECRET: process.env.ZOOM_WEBHOOK_SECRET,
+    // Google Meet bot credentials
+    GOOGLE_BOT_EMAIL: process.env.GOOGLE_BOT_EMAIL,
+    GOOGLE_BOT_PASSWORD: process.env.GOOGLE_BOT_PASSWORD,
     // Low balance threshold
     LOW_BALANCE_THRESHOLD: process.env.LOW_BALANCE_THRESHOLD,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,

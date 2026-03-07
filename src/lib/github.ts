@@ -4,6 +4,39 @@ import axios from "axios"
 import { generateText } from "./bedrock"
 import { progressStore } from "./progress-store"
 
+// ---------------------------------------------------------------------------
+// GitHub API exponential backoff (P59)
+// Retries on rate-limit (429 / 403 with X-RateLimit-Remaining: 0) and 5xx
+// ---------------------------------------------------------------------------
+
+const GITHUB_MAX_RETRIES = 2;
+
+async function withGithubRetry<T>(fn: () => Promise<T>, attempt = 0): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: unknown) {
+    const error = err as Error & { status?: number; response?: { status?: number; headers?: Record<string, string> } };
+    const status = error.status ?? error.response?.status ?? 0;
+
+    const isRateLimit = status === 429 || status === 403;
+    const isServerError = status >= 500 && status < 600;
+
+    if ((isRateLimit || isServerError) && attempt < GITHUB_MAX_RETRIES) {
+      // Honour Retry-After header if present, else exponential backoff with jitter
+      const retryAfterHeader = error.response?.headers?.['retry-after'];
+      const retryAfterSec = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+      const baseDelay = isNaN(retryAfterSec) ? Math.pow(2, attempt) * 1000 : retryAfterSec * 1000;
+      const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
+      const delay = Math.round(Math.max(500, baseDelay + jitter));
+      console.warn(`[GitHub] ${isRateLimit ? 'Rate-limited' : 'Server error'} (${status}). Retry ${attempt + 1}/${GITHUB_MAX_RETRIES} in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+      return withGithubRetry(fn, attempt + 1);
+    }
+
+    throw error;
+  }
+}
+
 type Response = {
     commitHash: string,
     commitMessage: string,
@@ -24,10 +57,9 @@ export const getCommitHashes = async (githubUrl: string, githubToken?: string, l
         auth: githubToken || process.env.GITHUB_TOKEN,
     });
     
-    const { data } = await octokit.rest.repos.listCommits({
-        owner,
-        repo
-    })
+    const { data } = await withGithubRetry(() =>
+      octokit.rest.repos.listCommits({ owner, repo })
+    );
     // console.log(data)
     const sortedCommits = data.sort((a: any, b: any) => new Date(b.commit.author.date).getTime() - new Date(a.commit.author.date).getTime())
 
@@ -58,11 +90,11 @@ export const pollCommits = async(projectId: string, githubToken?: string) => {
         const diffsToProcess = await Promise.all(
             unprocessedCommits.map(async (commit) => {
                 try {
-                    const { data } = await axios.get(`${githubUrl}/commit/${commit.commitHash}.diff`, {
-                        headers: {
-                            Accept: "application/vnd.github.v3.diff",
-                        },
-                    });
+                    const { data } = await withGithubRetry(() =>
+                      axios.get(`${githubUrl}/commit/${commit.commitHash}.diff`, {
+                        headers: { Accept: "application/vnd.github.v3.diff" },
+                      })
+                    );
                     return { diff: data, commitHash: commit.commitHash };
                 } catch (error) {
                     console.error(`Error fetching diff for ${commit.commitHash}:`, error);

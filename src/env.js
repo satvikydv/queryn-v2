@@ -28,6 +28,9 @@ export const env = createEnv({
     AMAZON_Q_APP_ID: z.string().optional(),
     // GitHub
     GITHUB_TOKEN: z.string().optional(),
+    // AI provider API keys (optional — project uses Bedrock as primary)
+    GEMINI_API_KEY: z.string().optional(),
+    GROQ_API_KEY: z.string().optional(),
     // Zoom
     ZOOM_JWT_TOKEN: z.string().optional(),
     ZOOM_WEBHOOK_SECRET: z.string().optional(),
@@ -70,6 +73,9 @@ export const env = createEnv({
     AMAZON_Q_APP_ID: process.env.AMAZON_Q_APP_ID,
     // GitHub
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    // AI provider API keys
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    GROQ_API_KEY: process.env.GROQ_API_KEY,
     // Zoom
     ZOOM_JWT_TOKEN: process.env.ZOOM_JWT_TOKEN,
     ZOOM_WEBHOOK_SECRET: process.env.ZOOM_WEBHOOK_SECRET,

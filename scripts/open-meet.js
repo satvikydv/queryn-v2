@@ -56,7 +56,7 @@ async function run() {
       console.log('[open-meet] Filled name: satvik yadav');
     }
   } catch (e) {
-    console.log('[open-meet] Name input not found or error:', e?.message || e);
+    console.log('[open-meet] Name input not found or error:', /** @type {any} */ (e)?.message || e);
   }
 
   // Wait 5s before clicking join

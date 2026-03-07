@@ -1,7 +1,8 @@
 import Groq from "groq-sdk";
 import { Document } from "@langchain/core/documents";
+import { env } from "@/env";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq = new Groq({ apiKey: env.GROQ_API_KEY });
 
 /**
  * Rate limiter for Groq API calls

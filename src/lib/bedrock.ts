@@ -65,6 +65,66 @@ async function withRetry<T>(fn: () => Promise<T>, attempt = 0): Promise<T> {
 }
 
 // ---------------------------------------------------------------------------
+// Circuit breaker (P61) — prevents cascading failures across Bedrock calls
+// ---------------------------------------------------------------------------
+// States: CLOSED (normal) → OPEN (fast-fail) → HALF_OPEN (probe) → CLOSED
+//
+// Shared via globalThis so all Next.js module instances share the same state.
+// ---------------------------------------------------------------------------
+
+const CB_FAILURE_THRESHOLD = 5;   // open after 5 consecutive failures
+const CB_COOLDOWN_MS = 30_000;    // stay OPEN for 30 s before probing
+
+declare const globalThis: typeof global & {
+  __querynBedrockCircuitBreaker?: CircuitBreakerState;
+};
+
+interface CircuitBreakerState {
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  failures: number;
+  openedAt: number; // ms timestamp
+}
+
+function getCB(): CircuitBreakerState {
+  if (!globalThis.__querynBedrockCircuitBreaker) {
+    globalThis.__querynBedrockCircuitBreaker = { state: 'CLOSED', failures: 0, openedAt: 0 };
+  }
+  return globalThis.__querynBedrockCircuitBreaker;
+}
+
+async function withCircuitBreaker<T>(fn: () => Promise<T>): Promise<T> {
+  const cb = getCB();
+
+  if (cb.state === 'OPEN') {
+    if (Date.now() - cb.openedAt >= CB_COOLDOWN_MS) {
+      cb.state = 'HALF_OPEN';
+      console.info('[Bedrock] Circuit half-open — probing...');
+    } else {
+      throw new Error('[Bedrock] Circuit OPEN — fast-failing to protect downstream services');
+    }
+  }
+
+  try {
+    const result = await fn();
+    // Success → reset
+    if (cb.state === 'HALF_OPEN') {
+      console.info('[Bedrock] Circuit closed after successful probe');
+    }
+    cb.state = 'CLOSED';
+    cb.failures = 0;
+    return result;
+  } catch (err) {
+    cb.failures++;
+    if (cb.failures >= CB_FAILURE_THRESHOLD) {
+      cb.state = 'OPEN';
+      cb.openedAt = Date.now();
+      console.error(`[Bedrock] Circuit OPENED after ${cb.failures} consecutive failures`);
+    }
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Text generation — Claude 3 (Sonnet or Haiku)
 // ---------------------------------------------------------------------------
 
@@ -127,8 +187,8 @@ export async function generateText(
     body: JSON.stringify(body),
   };
 
-  const response = await withRetry(() =>
-    getClient().send(new InvokeModelCommand(input)),
+  const response = await withCircuitBreaker(() =>
+    withRetry(() => getClient().send(new InvokeModelCommand(input))),
   );
 
   const decoded = new TextDecoder().decode(response.body);
@@ -194,15 +254,15 @@ export async function* streamGenerateText(
     if (systemPrompt) body.system = systemPrompt;
   }
 
-  const response = await withRetry(() =>
-    getClient().send(
+  const response = await withCircuitBreaker(() =>
+    withRetry(() => getClient().send(
       new InvokeModelWithResponseStreamCommand({
         modelId,
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify(body),
-      }),
-    ),
+      })
+    )),
   );
 
   if (!response.body) return;
@@ -253,8 +313,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     body: JSON.stringify({ inputText: trimmed }),
   };
 
-  const response = await withRetry(() =>
-    getClient().send(new InvokeModelCommand(input)),
+  const response = await withCircuitBreaker(() =>
+    withRetry(() => getClient().send(new InvokeModelCommand(input))),
   );
 
   const decoded = new TextDecoder().decode(response.body);

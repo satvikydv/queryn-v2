@@ -3,15 +3,19 @@ import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { pollCommits } from "@/lib/github";
 import { checkCredits, indexGithubRepo } from "@/lib/github-loader";
 import { progressStore } from "@/lib/progress-store";
+import { env } from "@/env";
 
 export const projectRouter = createTRPCRouter({
   //this is the endpoint for creating a project
   createProject: protectedProcedure
     .input(
       z.object({
-        name: z.string(),
-        githubUrl: z.string(),
-        githubToken: z.string().optional(),
+        name: z.string().min(1, "Name is required").max(100).trim(),
+        githubUrl: z.string().url("Must be a valid URL").max(500)
+          .refine((u) => u.startsWith("https://github.com/"), {
+            message: "Must be a GitHub URL",
+          }),
+        githubToken: z.string().max(200).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -32,17 +36,32 @@ export const projectRouter = createTRPCRouter({
       }
 
 
-      const project = await ctx.db.project.create({
-        data: {
-          name: input.name,
-          githubUrl: input.githubUrl,
-          teamMembers: {
-            create: {
-              userId: ctx.user.userId!,
+      // Atomic: create project + deduct credits in a single transaction (P57)
+      const { project, newCredits } = await ctx.db.$transaction(async (tx) => {
+        const proj = await tx.project.create({
+          data: {
+            name: input.name,
+            githubUrl: input.githubUrl,
+            teamMembers: {
+              create: { userId: ctx.user.userId! },
             },
           },
-        },
+        });
+        const updated = await tx.user.update({
+          where: { id: ctx.user.userId! },
+          data: { credits: { decrement: fileCount } },
+          select: { credits: true },
+        });
+        return { project: proj, newCredits: updated.credits };
       });
+
+      // Low-balance notification hook (P44)
+      if (newCredits <= env.LOW_BALANCE_THRESHOLD) {
+        console.warn(
+          `[Credits] User ${ctx.user.userId} balance low: ${newCredits} credits remaining (threshold: ${env.LOW_BALANCE_THRESHOLD})`
+        );
+        // TODO: plug in email/push notification here when notification service is wired
+      }
 
       // Initialize progress tracking
       progressStore.setProgress(project.id, {
@@ -54,7 +73,7 @@ export const projectRouter = createTRPCRouter({
         phase: 'summarizing'
       });
 
-      // Index repository with progress tracking
+      // Index repository with progress tracking (background, non-blocking)
       indexGithubRepo(project.id, input.githubUrl, input.githubToken, (progress) => {
         progressStore.setProgress(project.id, {
           ...progress,
@@ -62,7 +81,6 @@ export const projectRouter = createTRPCRouter({
           phase: 'embedding'
         });
       }).then(() => {
-        // Start commit processing after indexing
         progressStore.setProgress(project.id, {
           processed: fileCount,
           total: fileCount,
@@ -71,7 +89,6 @@ export const projectRouter = createTRPCRouter({
           status: 'in-progress',
           phase: 'commits'
         });
-        
         return pollCommits(project.id, input.githubToken);
       }).then(() => {
         progressStore.setProgress(project.id, {
@@ -93,17 +110,6 @@ export const projectRouter = createTRPCRouter({
         });
       });
 
-      //update credits after project creation
-      await ctx.db.user.update({
-        where: {
-          id: ctx.user.userId!,
-        },
-        data: {
-          credits: {
-            decrement: fileCount,
-          }
-        }
-      })
       return project;
     }),
 
@@ -155,9 +161,9 @@ export const projectRouter = createTRPCRouter({
   saveAnswer: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
-        question: z.string(),
-        answer: z.string(),
+        projectId: z.string().min(1),
+        question: z.string().min(1, "Question is required").max(2000),
+        answer: z.string().max(50_000),
         filesReferences: z.any(),
       }),
     )
@@ -193,7 +199,7 @@ export const projectRouter = createTRPCRouter({
   archiveProject: protectedProcedure
     .input(
       z.object({
-        projectId: z.string(),
+        projectId: z.string().min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -302,9 +308,64 @@ export const projectRouter = createTRPCRouter({
 
   // Get embedding progress for a project
   getProgress: protectedProcedure
-    .input(z.object({ projectId: z.string() }))
+    .input(z.object({ projectId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      const progress = progressStore.getProgress(input.projectId);
-      return progress || null;
+      // Prefer live in-memory state (set during active indexing)
+      const live = progressStore.getProgress(input.projectId);
+      if (live) return live;
+
+      // Fall back to DB for serverless recovery (P57 — DB-backed progress)
+      const project = await ctx.db.project.findFirst({
+        where: {
+          id: input.projectId,
+          teamMembers: { some: { userId: ctx.user.userId! } },
+        },
+        select: { indexingStatus: true, indexingMeta: true },
+      });
+      if (!project || project.indexingStatus === 'IDLE') return null;
+
+      const meta = (project.indexingMeta ?? {}) as Record<string, unknown>;
+      return {
+        processed: (meta.processed as number) ?? 0,
+        total: (meta.total as number) ?? 0,
+        currentFile: (meta.currentFile as string) ?? '',
+        estimatedTimeRemaining: 0,
+        status: project.indexingStatus.toLowerCase().replace('_', '-') as 'pending' | 'in-progress' | 'completed' | 'error',
+        phase: (meta.phase as 'summarizing' | 'embedding' | 'commits' | 'saving' | undefined) ?? undefined,
+        error: (meta.error as string | undefined) ?? undefined,
+      };
+    }),
+
+  // Semantic + text search across projects and Q&A history (P66)
+  search: protectedProcedure
+    .input(z.object({ query: z.string().min(1).max(200).trim() }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.user.userId!;
+      const q = input.query;
+
+      if (q.length < 2) return { projects: [], questions: [] };
+
+      const [projects, questions] = await Promise.all([
+        ctx.db.project.findMany({
+          where: {
+            deletedAt: null,
+            teamMembers: { some: { userId } },
+            name: { contains: q, mode: 'insensitive' },
+          },
+          select: { id: true, name: true, githubUrl: true },
+          take: 5,
+        }),
+        ctx.db.qAInteraction.findMany({
+          where: {
+            userId,
+            question: { contains: q, mode: 'insensitive' },
+          },
+          select: { id: true, question: true, projectId: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        }),
+      ]);
+
+      return { projects, questions };
     }),
 });

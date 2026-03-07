@@ -4,7 +4,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 export const meetingRouter = createTRPCRouter({
   // List all meeting sessions for a project
   getMeetings: protectedProcedure
-    .input(z.object({ projectId: z.string() }))
+    .input(z.object({ projectId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       // Verify membership
       const member = await ctx.db.teamMember.findFirst({

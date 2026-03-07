@@ -218,53 +218,43 @@ export class BotWorker extends EventEmitter {
     });
 
     // ------------------------------------------------------------------
-    // Launch Chromium
+    // Launch Chromium with PERSISTENT profile — stores full Google login
+    // (cookies, IndexedDB, service workers, etc.) so you only need to
+    // sign in once. Profile lives at .pw/chromium-profile/.
     // ------------------------------------------------------------------
-    this.browser = await chromium.launch({
-      headless: false, // headful for now — easier to debug; set true in prod
+    const profileDir = path.join(process.cwd(), ".pw", "chromium-profile");
+    if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+
+    const context = await chromium.launchPersistentContext(profileDir, {
+      headless: false,
       args: [
-        "--use-fake-ui-for-media-stream",    // auto-grant mic/cam
-        "--use-fake-device-for-media-stream", // fake mic so Meet doesn't fail
-        "--autoplay-policy=no-user-gesture-required", // allow AudioContext without gesture
+        "--use-fake-ui-for-media-stream",
+        "--use-fake-device-for-media-stream",
+        "--autoplay-policy=no-user-gesture-required",
         "--disable-blink-features=AutomationControlled",
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--window-size=1280,800",
       ],
-    });
-
-    // Reuse saved storage state if available so we don't have to sign in each run.
-    try {
-      const authDir = path.dirname(PLAYWRIGHT_AUTH_PATH);
-      if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
-    } catch {}
-
-    const contextOpts: any = {
       permissions: ["microphone", "camera"],
       userAgent:
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       viewport: { width: 1280, height: 800 },
-    };
+    });
 
-    if (fs.existsSync(PLAYWRIGHT_AUTH_PATH)) {
-      contextOpts.storageState = PLAYWRIGHT_AUTH_PATH;
-      console.log("[BotWorker] Using saved Playwright storage state:", PLAYWRIGHT_AUTH_PATH);
-    } else {
-      console.log("[BotWorker] No saved Playwright storage state found; joining as guest or use save-auth script to persist login.");
-    }
+    // With persistent context, browser() returns the Browser instance
+    this.browser = context.browser() ?? null;
 
-    const context = await this.browser.newContext(contextOpts);
-
-    // Stealth: hide automation signals even when using saved auth
+    // Stealth: hide automation signals
     await context.addInitScript(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => false, configurable: true });
       Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5], configurable: true });
       Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"], configurable: true });
     });
 
-    this.page = await context.newPage();
+    this.page = context.pages()[0] ?? await context.newPage();
 
     // Forward browser console to Node.js for debugging
     this.page.on("console", (msg) => {

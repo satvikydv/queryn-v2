@@ -13,6 +13,7 @@ import { ZodError } from "zod";
 import { db } from "@/server/db";
 import { auth } from "@clerk/nextjs/server";
 import prisma from "../prisma";
+import { logSecurityEvent } from "@/lib/security-logger";
 
 /**
  * 1. CONTEXT
@@ -83,9 +84,57 @@ export const createTRPCRouter = t.router;
  * network latency that would occur in production but not in local development.
  */
 
+// ---------------------------------------------------------------------------
+// Rate limiting (P68) — sliding window, 100 req / 60 s per userId
+// ---------------------------------------------------------------------------
+
+declare const globalThis: typeof global & {
+  __querynRateLimit?: Map<string, { count: number; resetAt: number }>;
+};
+
+function getRateLimitMap(): Map<string, { count: number; resetAt: number }> {
+  if (!globalThis.__querynRateLimit) {
+    globalThis.__querynRateLimit = new Map();
+  }
+  return globalThis.__querynRateLimit;
+}
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 100;
+
+const rateLimitMiddleware = t.middleware(async ({ next, ctx, path }) => {
+  const userId = (ctx as { user?: { userId?: string } }).user?.userId;
+  if (!userId) return next({ ctx });
+
+  const now = Date.now();
+  const map = getRateLimitMap();
+  const entry = map.get(userId);
+
+  if (!entry || now > entry.resetAt) {
+    map.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+  } else {
+    entry.count++;
+    if (entry.count > RATE_LIMIT_MAX) {
+      logSecurityEvent({
+        event: "RATE_LIMIT_EXCEEDED",
+        userId,
+        path,
+        reason: `${entry.count} requests in window`,
+      });
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: `Rate limit exceeded. Try again in ${Math.ceil((entry.resetAt - now) / 1000)}s`,
+      });
+    }
+  }
+
+  return next({ ctx });
+});
+
 const isAuthenticated = t.middleware(async ({ next, ctx }) => {
   const user = await auth()
-  if(!user){
+  if (!user?.userId) {
+    logSecurityEvent({ event: "AUTH_FAILURE", reason: "No active session" });
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: "You must be logged in to access this resource",
@@ -125,4 +174,7 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  * are logged in.
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
-export const protectedProcedure = t.procedure.use(isAuthenticated)
+export const protectedProcedure = t.procedure
+  .use(isAuthenticated)
+  .use(rateLimitMiddleware)
+  .use(timingMiddleware);

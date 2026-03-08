@@ -11,6 +11,9 @@ const config = {
 		// Keep linting locally and in CI; fix lint errors separately.
 		ignoreDuringBuilds: true,
 	},
+	outputFileTracingIncludes: {
+		"/**": ["./generated/prisma/**/*"],
+	},
 };
 
 export default config;

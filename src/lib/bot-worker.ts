@@ -523,6 +523,23 @@ export class BotWorker extends EventEmitter {
       return;
     }
 
+    // Check if already signed in via persistent profile cookies
+    try {
+      await page.goto("https://myaccount.google.com", {
+        waitUntil: "domcontentloaded",
+        timeout: 15000,
+      });
+      await page.waitForTimeout(2000);
+      const url = page.url();
+      if (!url.includes("accounts.google.com/signin") && !url.includes("accounts.google.com/v3/signin")) {
+        console.log("[BotWorker] Already signed in via persistent profile — skipping login. URL:", url);
+        return;
+      }
+      console.log("[BotWorker] Not signed in, proceeding with login...");
+    } catch {
+      console.log("[BotWorker] Could not check session, proceeding with login...");
+    }
+
     await page.goto("https://accounts.google.com/signin/v2/identifier", {
       waitUntil: "domcontentloaded",
       timeout: 20000,

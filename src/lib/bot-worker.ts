@@ -340,10 +340,12 @@ export class BotWorker extends EventEmitter {
     this.transcribeStop = stop;
 
     // ------------------------------------------------------------------
-    // Sign into Google — DISABLED: joining as guest instead
+    // Sign into Google (if credentials provided) so bot can join restricted meetings
     // ------------------------------------------------------------------
-    // this.emit("status", "signing_in");
-    // await this.signInToGoogle(this.page);
+    if (env.GOOGLE_BOT_EMAIL && env.GOOGLE_BOT_PASSWORD) {
+      this.emit("status", "signing_in");
+      await this.signInToGoogle(this.page);
+    }
 
     // ------------------------------------------------------------------
     // Navigate to Google Meet

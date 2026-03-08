@@ -1,6 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/server/db";
-import { BotWorker } from "@/lib/bot-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,51 +67,49 @@ export async function GET(
         send({ type: "ping" });
       }, 15000);
 
-      // The bot may not be in the registry yet if the client connected before
-      // bot.start() completed registration (race condition). Retry for up to 8s.
-      const attachBot = (attemptsLeft: number) => {
-        const bot = BotWorker.get(sessionId);
+      // Poll the database every 2s for transcript/status updates.
+      // This works whether the bot runs in-process (local dev) or on EC2 (production) —
+      // both paths write directly to the same Neon DB.
+      let lastTranscript = "";
+      let lastStatus = "";
 
-        if (!bot) {
-          if (attemptsLeft <= 0) {
-            send({ type: "error", payload: "Bot not running" });
+      const pollInterval = setInterval(async () => {
+        try {
+          const s = await db.meetingSession.findUnique({ where: { id: sessionId } });
+          if (!s) {
+            clearInterval(pollInterval);
             clearInterval(pingInterval);
+            send({ type: "error", payload: "Session not found" });
             controller.close();
             return;
           }
-          setTimeout(() => attachBot(attemptsLeft - 1), 500);
-          return;
-        }
 
-        bot.on("status", (status: string) => {
-          send({ type: "status", payload: status });
-        });
+          // Emit status changes
+          const currentStatus = s.status.toLowerCase();
+          if (currentStatus !== lastStatus) {
+            send({ type: "status", payload: currentStatus });
+            lastStatus = currentStatus;
+          }
 
-        bot.on("transcriptDelta", (text: string, isFinal: boolean) => {
-          send({ type: "transcript", payload: text, isFinal });
-        });
+          // Emit new transcript content as a delta
+          const currentTranscript = s.transcript ?? "";
+          if (currentTranscript.length > lastTranscript.length) {
+            const delta = currentTranscript.slice(lastTranscript.length);
+            send({ type: "transcript", payload: delta, isFinal: true });
+            lastTranscript = currentTranscript;
+          }
 
-        bot.on("error", (err: Error) => {
-          send({ type: "error", payload: err.message });
-          clearInterval(pingInterval);
-          controller.close();
-        });
-
-        bot.on("completed", () => {
-          // Fetch final data from DB and send
-          void db.meetingSession.findUnique({ where: { id: sessionId } }).then((s) => {
-            send({
-              type: "completed",
-              transcript: s?.transcript,
-              summary: s?.summary,
-            });
+          // Done
+          if (s.status === "COMPLETED" || s.status === "FAILED") {
+            clearInterval(pollInterval);
             clearInterval(pingInterval);
+            send({ type: "completed", transcript: s.transcript, summary: s.summary });
             controller.close();
-          });
-        });
-      };
-
-      attachBot(16); // 16 × 500ms = 8s max wait
+          }
+        } catch {
+          // DB error — keep polling, don't crash the stream
+        }
+      }, 2000);
     },
   });
 

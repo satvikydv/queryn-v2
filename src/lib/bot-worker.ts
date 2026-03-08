@@ -413,7 +413,7 @@ export class BotWorker extends EventEmitter {
       console.log("[BotWorker] Looking for name input field...");
       const nameInput = await this.page.waitForSelector(
         'input[placeholder="Your name"], input[jsname="YPqjbf"]',
-        { timeout: 15000 },
+        { timeout: 3000 },
       );
       if (nameInput) {
         await nameInput.click();
@@ -430,11 +430,7 @@ export class BotWorker extends EventEmitter {
     // ------------------------------------------------------------------
     console.log("[BotWorker] Looking for join button...");
 
-    // Wait a short interval after filling the name so Meet finishes pre-join UI changes
-    try {
-      await this.page.waitForTimeout(5000);
-      console.log('[BotWorker] Waited 5s before attempting to click join');
-    } catch {}
+
     let joined = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {

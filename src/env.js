@@ -39,6 +39,9 @@ export const env = createEnv({
     GOOGLE_BOT_PASSWORD: z.string().optional(),
     // Low balance threshold (credits)
     LOW_BALANCE_THRESHOLD: z.coerce.number().default(20),
+    // EC2 bot server (set on Vercel; omit in local dev to run bot in-process)
+    BOT_SERVER_URL: z.string().url().optional(),
+    BOT_SERVER_SECRET: z.string().optional(),
   },
 
   /**
@@ -84,6 +87,9 @@ export const env = createEnv({
     GOOGLE_BOT_PASSWORD: process.env.GOOGLE_BOT_PASSWORD,
     // Low balance threshold
     LOW_BALANCE_THRESHOLD: process.env.LOW_BALANCE_THRESHOLD,
+    // EC2 bot server
+    BOT_SERVER_URL: process.env.BOT_SERVER_URL,
+    BOT_SERVER_SECRET: process.env.BOT_SERVER_SECRET,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**

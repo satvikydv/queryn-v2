@@ -11,6 +11,7 @@
  *   pm2 start 'npx tsx bot-server.ts' --name queryn-bot
  */
 
+import "dotenv/config"; // must be first — loads .env before @/env validation runs
 import http from "http";
 import { BotWorker } from "@/lib/bot-worker";
 

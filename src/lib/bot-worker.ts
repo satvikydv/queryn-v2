@@ -523,7 +523,9 @@ export class BotWorker extends EventEmitter {
       return;
     }
 
-    // Check if already signed in via persistent profile cookies
+    // Check if already signed in via persistent profile cookies.
+    // myaccount.google.com stays on that subdomain when signed in.
+    // When NOT signed in it redirects to google.com/account/about or accounts.google.com/signin.
     try {
       await page.goto("https://myaccount.google.com", {
         waitUntil: "domcontentloaded",
@@ -531,11 +533,11 @@ export class BotWorker extends EventEmitter {
       });
       await page.waitForTimeout(2000);
       const url = page.url();
-      if (!url.includes("accounts.google.com/signin") && !url.includes("accounts.google.com/v3/signin")) {
+      if (url.includes("myaccount.google.com")) {
         console.log("[BotWorker] Already signed in via persistent profile — skipping login. URL:", url);
         return;
       }
-      console.log("[BotWorker] Not signed in, proceeding with login...");
+      console.log("[BotWorker] Not signed in (redirected to:", url, "), proceeding with login...");
     } catch {
       console.log("[BotWorker] Could not check session, proceeding with login...");
     }

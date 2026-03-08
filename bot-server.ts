@@ -89,6 +89,45 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ── Stop bot ──────────────────────────────────────────────────────────────
+  if (req.method === "POST" && req.url === "/stop") {
+    if (!isAuthorized(req)) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Unauthorized" }));
+      return;
+    }
+
+    let body: unknown;
+    try {
+      body = await readBody(req);
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON body" }));
+      return;
+    }
+
+    const { sessionId } = body as { sessionId?: string };
+    if (!sessionId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "sessionId is required" }));
+      return;
+    }
+
+    const bot = BotWorker.get(sessionId);
+    if (bot) {
+      await bot.stop(sessionId).catch((err: unknown) => {
+        console.error(`[bot-server] Error stopping ${sessionId}:`, err);
+      });
+      console.log(`[bot-server] Bot stopped → session ${sessionId}`);
+    } else {
+      console.log(`[bot-server] No active bot for session ${sessionId} (already stopped?)`);
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true, sessionId }));
+    return;
+  }
+
   res.writeHead(404);
   res.end("Not found");
 });

@@ -92,7 +92,7 @@ export default async function LandingPage() {
             <div className="hero-image-wrapper">
               <div className="hero-image-frame aspect-video relative">
                 <Image
-                  src="/assets/queryn2.png"
+                  src="/assets/queryn3.png"
                   alt="Queryn Dashboard Interface"
                   fill
                   className="object-cover"
